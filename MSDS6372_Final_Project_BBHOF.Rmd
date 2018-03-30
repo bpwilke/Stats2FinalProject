@@ -10,6 +10,7 @@ knitr::opts_chunk$set(echo = TRUE)
 # required libraries
 library(kableExtra) # to make uber sexy tables for output
 library(pastecs) # for easy descriptive statistics
+library(ggbiplot) # implementation of biplot using ggplot2 for plotting PCs
 
 # turn off scientfic notation for the entire script
 options(scipen = 999)
@@ -70,11 +71,31 @@ knitr::kable(descriptiveTable,caption = "Descriptive Statistics for Numeric Feat
 
 ```{r echo=TRUE}
 
-# remove non-numeric features
-BBHOF_PCA <- BBHOFRaw[,!(colnames(BBHOFRaw) %in% dropcolumns)]
+# remove non-numeric features and features with missing values (NEED TO REVISIT THIS)
+dropcolumnsPCA <- c("Name", "PrimaryPositionPlayed", "HOFMembership", "Strikeouts", "StolenBases", "CaughtStealing", "StolenBaseRuns")
+BBHOF_PCA <- BBHOFRaw[,!(colnames(BBHOFRaw) %in% dropcolumnsPCA)]
 
-BHHOF_PCA <- prcomp(BBHOF_PCA, center=TRUE, scale.=TRUE)
+# extract labels (player made it into HOF), convert to factor
+BBHOF_Labels_PCA <- BBHOFRaw["HOFMembership"]
+BBHOF_Labels_PCA$HOFMembership <- as.factor(BBHOF_Labels_PCA$HOFMembership)
 
+# perform PCA
+BBHOF_PCA <- prcomp(BBHOF_PCA, center=TRUE, scale.=TRUE)
+# since the labels also include 2, converting those to 1, so the result is truly binary (1, 0)
+BBHOF_Labels_PCA$HOFMembership[BBHOF_Labels_PCA$HOFMembership == 2] <- 1
+
+# print principal components
+print(BBHOF_PCA)
+
+# summary of principal components
+summary(BBHOF_PCA)
 
 
 ```
+
+```{r, echo=TRUE, fig.width=15, fig.height=10}
+# plot PCs using ggbiplot
+ggbiplot(BBHOF_PCA, obs.scale=1, var.scale=1, groups=BBHOF_Labels_PCA$HOFMembership, ellipse=TRUE, circle=TRUE) + theme(legend.position='top') + scale_color_discrete()
+
+```
+
