@@ -19,6 +19,7 @@ options(scipen = 999)
 
 ## Introduction
 
+
 ## Exploratory Data Analysis
 
 ```{r, echo=TRUE}
@@ -43,9 +44,14 @@ BBHOFRaw$CaughtStealing <- as.integer(BBHOFRaw$CaughtStealing)
 BBHOFRaw$StolenBaseRuns[BBHOFRaw$StolenBaseRuns == "."] <- NA
 BBHOFRaw$StolenBaseRuns <- as.integer(BBHOFRaw$StolenBaseRuns)
 
-# display top 5 and bottom 5 observations
-knitr::kable(BBHOFRaw[1:10,],caption = "Top 10 Observations from Baseball Hall of Fame Data", row.names = FALSE, "html") %>%
+# display top 5 observations
+knitr::kable(BBHOFRaw[1:5,],caption = "Top 10 Observations from Baseball Hall of Fame Data", row.names = FALSE, "html") %>%
   kable_styling(bootstrap_options = c("striped","hover"))
+
+# display frequency table for did/did not get inducted into HOF
+# since the labels also include 2, converting those to 1, so the result is truly binary (1, 0)
+BBHOFRaw$HOFMembership[BBHOFRaw$HOFMembership == 2] <- 1
+count(BBHOFRaw, "HOFMembership")
 
 # descriptive statistics, load into new data frame for processing
 descriptiveTable <- stat.desc(BBHOFRaw)
@@ -81,11 +87,9 @@ BBHOF_Labels_PCA$HOFMembership <- as.factor(BBHOF_Labels_PCA$HOFMembership)
 
 # perform PCA
 BBHOF_PCA <- prcomp(BBHOF_PCA, center=TRUE, scale.=TRUE)
-# since the labels also include 2, converting those to 1, so the result is truly binary (1, 0)
-BBHOF_Labels_PCA$HOFMembership[BBHOF_Labels_PCA$HOFMembership == 2] <- 1
 
-# print principal components
-print(BBHOF_PCA)
+# print principal components (only the first 4 PCs)
+print(BBHOF_PCA$rotation[,1:4])
 
 # summary of principal components
 summary(BBHOF_PCA)
@@ -98,4 +102,6 @@ summary(BBHOF_PCA)
 ggbiplot(BBHOF_PCA, obs.scale=1, var.scale=1, groups=BBHOF_Labels_PCA$HOFMembership, ellipse=TRUE, circle=TRUE) + theme(legend.position='top') + scale_color_discrete()
 
 ```
+
+
 
