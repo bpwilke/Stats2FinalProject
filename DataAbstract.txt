@@ -1,0 +1,142 @@
+NAME:   Career Records for All Modern Position Players Eligible for the
+        Major League Baseball Hall of Fame
+TYPE:	Census
+SIZE:	1340 observations, 27 variables
+
+DESCRIPTIVE ABSTRACT:
+This dataset includes the number of seasons played, games played,
+official at-bats (AB), runs scored, hits (H), doubles (2B), triples
+(3B), home runs (HR), runs batted in (RBI), walks (BB), strikeouts
+(SO), batting average (BA), on base percentage (OBP), slugging
+percentage (SLG), stolen bases (SB), times caught stealing (CS),
+fielding average (FA), primary position played (POS), adjusted
+production (AP), batting runs (BR), adjusted batting runs (ABR), runs
+created (RC), stolen base runs (SBR), fielding runs (FR), and total
+player rating (TPR) for each modern (post-1900) major league baseball
+player who had retired prior to the 1993 season and who was eligible
+for the Major League Baseball Hall of Fame (had played in at least ten
+seasons).  In addition, the dataset includes an indication of whether
+or not the player has been admitted into the Hall of Fame and, if so,
+under what set of rules he was admitted (HOF).
+
+SOURCE:
+These data are taken from _The Baseball Encyclopedia_ (Reichler 1993)
+and _Total Baseball_ (Thorn and Palmer 1993).
+
+VARIABLE DESCRIPTIONS:
+Seasons played, games played, official at-bats (AB), runs scored, hits
+(H), doubles (2B), triples (3B), home runs (HR), runs batted in (RBI),
+walks (BB), strikeouts (SO), stolen bases (SB), and times caught
+stealing (CS) each represent the number of times the corresponding
+event occurred over the course of a player's career.  Batting average
+(BA), on base percentage (OBP), slugging percentage (SLG), and fielding
+average (FA) are each ratios of various career totals.  Primary
+position played (POS) represents the defensive position (catcher, first
+base, second base, shortstop, third base, outfield, or designated
+hitter) played most frequently by the player throughout his career.
+Adjusted production (AP), batting runs (BR), adjusted batting runs
+(ABR), runs created (RC), stolen base runs (SBR), fielding runs (FR),
+and total player rating (TPR) are various composites of player career
+totals.  Finally, the dataset includes an indication of whether or not
+the player has been admitted into the Major League Baseball Hall of
+Fame and, if so, under what set of rules he was admitted.
+ 
+The JSE Data Archive contains three versions of this dataset.
+
+   MLBHOF-tab.new.dat contains the data in a tab-delimited format with 
+   a single row of data for the career of each player.
+
+   MLBHOF.new.xls contains the data in an Excel file, again with a 
+   single row of data for the career of each player.
+
+   MLBHOF.new.dat contains the data in a fixed column format with a 
+   single row of data for the career of each player.
+
+The format for MLBHOF.new.dat is described below, although the same
+variables in the order given below are found on each row of
+MLBHOF-tab.new.dat and MLBHOF.new.xls as well.
+
+Columns
+  1 -  19   Name
+ 20 -  21   Number Of Seasons Played
+ 27 -  30   Games Played
+ 32 -  36   Official At-Bats
+ 38 -  41   Runs Scored
+ 43 -  46   Hits
+ 48 -  50   Doubles
+ 52 -  54   Triples
+ 56 -  58   Home Runs
+ 60 -  63   Runs Batted In
+ 65 -  68   Walks
+ 70 -  73   Strikeouts
+ 76 -  79   Batting Average
+ 82 -  85   On Base Percentage
+ 88 -  91   Slugging Percentage
+ 93 -  95   Adjusted Production
+ 97 - 100   Batting Runs
+102 - 105   Adjusted Batting Runs
+107 - 110   Runs Created
+112 - 115   Stolen Bases
+117 - 119   Caught Stealing
+121 - 124   Stolen Base Runs
+128 - 131   Fielding Average
+133 - 136   Fielding Runs
+      139   Primary Position Played
+141 - 146   Total Player Rating
+      149   Hall Of Fame Membership
+
+Values are column-aligned.  The few missing values occur only where the
+data were either not collected or are unavailable.  Measures such as
+Caught Stealing, for example, have been collected sporadically
+throughout Major League Baseball's history.
+
+STORY BEHIND THE DATA:
+This dataset has been used in a undergraduate/master's level capstone
+course in data analysis in the University of Cincinnati's College of
+Business Administration.  The students enrolled in this course are
+working toward either an undergraduate major in quantitative analysis
+or a master's degree in quantitative analysis.
+
+Additional information about these data can be found in the "Datasets
+and Stories" article "Career Records for All Modern Position Players
+Eligible for the Major League Baseball Hall of Fame" in the _Journal of
+Statistics Education_ (Cochran 2000).
+
+PEDAGOGICAL NOTES:
+The purpose of the course (and use of the dataset) is to provide
+students with a full experience in analyzing data through a
+comprehensive data analysis project.  The class is divided into groups
+of three or four students, each of which is provided with a diskette
+containing a unique part of a dataset.  These data include various
+instructor-induced anomalies such missing values, repeated
+observations, and misplaced decimals.  Throughout the course, students
+are instructed in exploratory data analysis, data management, topics in
+statistical modeling, and the role of a statistical consultant.  Final
+grades are based primarily on presentations of results given by the
+student groups to their classmates, as well as to faculty and Ph.D.
+students from our department, at the end of the academic term.
+
+REFERENCES:
+Cochran, J. J., and Levy, M. S. (2000), "Who 'Deserves' To Be in the
+Major League Baseball Hall of Fame?" University of Cincinnati Working
+Paper #2000-01.
+
+James, B. (1982), _The Bill James Baseball Abstract 1982_, New York:
+Ballantine Books.
+
+Reichler, J. L. (ed.) (1993), _The Baseball Encyclopedia_, New York:
+MacMillan Publishing Company.
+
+Thorn, J., and Palmer, P. (1984), _The Hidden Game Of Baseball: A
+Revolutionary Approach to Baseball and Its Statistics_, New York:
+Doubleday.
+
+----- (1993), _Total Baseball_, New York: Harper Collins Publishers.
+
+SUBMITTED BY:
+James J. Cochran
+Department of Computer Information Systems and Analysis
+Louisiana Tech University
+Ruston, LA  71272
+cochrajj@econqa.cba.uc.edu
+
