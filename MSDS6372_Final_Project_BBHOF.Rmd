@@ -1,0 +1,80 @@
+---
+title: "MSDS6372 - Final Project"
+author: "Benjamin Wilke, Michael Landrum"
+date: "March 30, 2018"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+# required libraries
+library(kableExtra) # to make uber sexy tables for output
+library(pastecs) # for easy descriptive statistics
+
+# turn off scientfic notation for the entire script
+options(scipen = 999)
+
+```
+
+## Introduction
+
+## Exploratory Data Analysis
+
+```{r, echo=TRUE}
+# import the data
+BBHOFRaw <- read.table("MLBHOF-tab.new.dat.txt", sep="\t", header=FALSE)
+
+# create column names
+colnames(BBHOFRaw) <- c("Name", "NumSeasonsPlayed", "GamesPlayed", "OfficialAtBats", "RunsScored", "Hits", "Doubles", "Triples", "HomeRuns", "RunsBattedIn", "Walks", "Strikeouts", "BattingAvg", "OnBasePct", "SluggingPct", "AdjustedProduction", "BattingRuns", "AdjustedBattingRuns", "RunsCreated", "StolenBases", "CaughtStealing", "StolenBaseRuns", "FieldingAvg", "FieldingRuns", "PrimaryPositionPlayed", "TotalPlayerRating", "HOFMembership")
+
+# fix some import typecasting issues and apply NA null for values with "."
+BBHOFRaw$Name <- as.character(BBHOFRaw$Name)
+
+BBHOFRaw$Strikeouts[BBHOFRaw$Strikeouts == "."] <- NA
+BBHOFRaw$Strikeouts <- as.integer(BBHOFRaw$Strikeouts)
+
+BBHOFRaw$StolenBases[BBHOFRaw$StolenBases == "."] <- NA
+BBHOFRaw$StolenBases <- as.integer(BBHOFRaw$StolenBases)
+
+BBHOFRaw$CaughtStealing[BBHOFRaw$CaughtStealing == "."] <- NA
+BBHOFRaw$CaughtStealing <- as.integer(BBHOFRaw$CaughtStealing)
+
+BBHOFRaw$StolenBaseRuns[BBHOFRaw$StolenBaseRuns == "."] <- NA
+BBHOFRaw$StolenBaseRuns <- as.integer(BBHOFRaw$StolenBaseRuns)
+
+# display top 5 and bottom 5 observations
+knitr::kable(BBHOFRaw[1:10,],caption = "Top 10 Observations from Baseball Hall of Fame Data", row.names = FALSE, "html") %>%
+  kable_styling(bootstrap_options = c("striped","hover"))
+
+# descriptive statistics, load into new data frame for processing
+descriptiveTable <- stat.desc(BBHOFRaw)
+
+# remove non-numeric features
+dropcolumns <- c("Name","PrimaryPositionPlayed", "HOFMembership")
+descriptiveTable <- descriptiveTable[,!(colnames(descriptiveTable) %in% dropcolumns)]
+
+# round all numeric values to 2 decimal points
+descriptiveTable <- round(descriptiveTable, 2)
+
+# remove rows for statistics we don't care about, leaving: N, Mean, Median, Std Dev, Var, Min, Max
+remove <- c("nbr.null", "nbr.na", "range", "sum", "SE.mean", "CI.mean", "coef.var")
+descriptiveTable <- descriptiveTable[-which(rownames(descriptiveTable) %in% remove),]
+
+# display descriptive statistics
+knitr::kable(descriptiveTable,caption = "Descriptive Statistics for Numeric Features in the Baseball Hall of Fame Data", row.names = TRUE, "html") %>%
+  kable_styling(bootstrap_options = c("striped","hover", "condensed", "responsive"))
+
+```
+
+
+
+```{r echo=TRUE}
+
+# remove non-numeric features
+BBHOF_PCA <- BBHOFRaw[,!(colnames(BBHOFRaw) %in% dropcolumns)]
+
+BHHOF_PCA <- prcomp(BBHOF_PCA, center=TRUE, scale.=TRUE)
+
+
+
+```
