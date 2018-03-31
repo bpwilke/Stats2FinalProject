@@ -124,14 +124,14 @@ alright....working some logistic regression..
 
 # copy data set, remove Name from the raw data set, so it's not included in the model, also removing features to play with the model
 BBHOF_logistic <- BBHOFRaw
-dropcolumns <- c("Name", "StolenBaseRuns", "RunsScored", "OfficialAtBats", "RunsBattedIn", "OnBasePct", "Triples", "StrikeOuts", "AdjustedProduction")
+dropcolumns <- c("Name", "StolenBaseRuns", "StrikeOuts", "CaughtStealing", "StolenBases")
 BBHOF_logistic <- BBHOF_logistic[,!(colnames(BBHOF_logistic) %in% dropcolumns)]
 
 # split the raw data into testing and training data
-set.seed(101) # set seed so that same sample can be reproduced in future
+set.seed(100) # set seed so that same sample can be reproduced in future
 
-# now selecting 75% of data as sample from total 'n' rows of the data  
-sample <- sample.int(n=nrow(BBHOF_logistic), size=floor(.75*nrow(BBHOF_logistic)), replace=FALSE)
+# now selecting 90% of data as sample from total 'n' rows of the data  
+sample <- sample.int(n=nrow(BBHOF_logistic), size=floor(.90*nrow(BBHOF_logistic)), replace=FALSE)
 
 # subset the data using the sample integer vector created above
 train <- BBHOF_logistic[sample, ]
@@ -142,8 +142,24 @@ model <- glm(train$HOFMembership ~., family=binomial(link='logit'),data=train)
 
 summary(model)
 
+# predict based on the test data, type='response' output probabilities in the form of P(y=1|X)
+fittedresults <- predict(model, newdata=test, type='response')
+
+# there are some NAs in the fitted results...we need to check into that - not sure how that's possible if I'm removing the features with NAs
+sum(is.na(fittedresults))
+
+# if P(y=1|X) > 0.5 then y = 1 otherwise y=0
+fittedresults <- ifelse(fittedresults > 0.5, 1, 0)
+
+# calculate the mean of the fitted results that don't equal the observed result - IGNORE NAs
+misClasificError <- mean(fittedresults != test$HOFMembership, na.rm=TRUE)
+
+# print the output as 100% - error
+print(paste('Accuracy',1-misClasificError))
+
 
 ```
+
 
 
 

@@ -1372,23 +1372,23 @@ ggbiplot(BBHOF_PCA, obs.scale=1, var.scale=1, groups=BBHOF_Labels_PCA$HOFMembers
 <p>alright….working some logistic regression..</p>
 <pre class="r"><code># copy data set, remove Name from the raw data set, so it's not included in the model, also removing features to play with the model
 BBHOF_logistic &lt;- BBHOFRaw
-dropcolumns &lt;- c(&quot;Name&quot;, &quot;StolenBaseRuns&quot;, &quot;RunsScored&quot;, &quot;OfficialAtBats&quot;, &quot;RunsBattedIn&quot;, &quot;OnBasePct&quot;, &quot;Triples&quot;, &quot;StrikeOuts&quot;, &quot;AdjustedProduction&quot;)
+dropcolumns &lt;- c(&quot;Name&quot;, &quot;StolenBaseRuns&quot;, &quot;StrikeOuts&quot;, &quot;CaughtStealing&quot;, &quot;StolenBases&quot;)
 BBHOF_logistic &lt;- BBHOF_logistic[,!(colnames(BBHOF_logistic) %in% dropcolumns)]
 
 # split the raw data into testing and training data
-set.seed(101) # set seed so that same sample can be reproduced in future
+set.seed(100) # set seed so that same sample can be reproduced in future
 
-# now selecting 75% of data as sample from total 'n' rows of the data  
-sample &lt;- sample.int(n=nrow(BBHOF_logistic), size=floor(.75*nrow(BBHOF_logistic)), replace=FALSE)
+# now selecting 90% of data as sample from total 'n' rows of the data  
+sample &lt;- sample.int(n=nrow(BBHOF_logistic), size=floor(.90*nrow(BBHOF_logistic)), replace=FALSE)
 
 # subset the data using the sample integer vector created above
 train &lt;- BBHOF_logistic[sample, ]
 test  &lt;- BBHOF_logistic[-sample, ]
 
 # fitting the binomial logistic regression model, HOFMembership is dependent, fitting using all features
-model &lt;- glm(train$HOFMembership ~., family=binomial(link='logit'),data=train)</code></pre>
-<pre><code>## Warning: glm.fit: fitted probabilities numerically 0 or 1 occurred</code></pre>
-<pre class="r"><code>summary(model)</code></pre>
+model &lt;- glm(train$HOFMembership ~., family=binomial(link='logit'),data=train)
+
+summary(model)</code></pre>
 <pre><code>## 
 ## Call:
 ## glm(formula = train$HOFMembership ~ ., family = binomial(link = &quot;logit&quot;), 
@@ -1396,45 +1396,64 @@ model &lt;- glm(train$HOFMembership ~., family=binomial(link='logit'),data=train
 ## 
 ## Deviance Residuals: 
 ##      Min        1Q    Median        3Q       Max  
-## -2.11610  -0.06486  -0.01714  -0.00462   2.76000  
+## -2.46663  -0.13482  -0.04609  -0.01668   3.08399  
 ## 
 ## Coefficients:
-##                            Estimate   Std. Error z value   Pr(&gt;|z|)    
-## (Intercept)             -32.3149603   32.5018799  -0.994    0.32010    
-## NumSeasonsPlayed          0.0930822    0.1923975   0.484    0.62853    
-## GamesPlayed              -0.0037160    0.0044922  -0.827    0.40811    
-## Hits                     -0.0156104    0.0051114  -3.054    0.00226 ** 
-## Doubles                  -0.0118183    0.0060790  -1.944    0.05188 .  
-## HomeRuns                 -0.0123045    0.0080035  -1.537    0.12420    
-## Walks                    -0.0105072    0.0035009  -3.001    0.00269 ** 
-## Strikeouts               -0.0004521    0.0014636  -0.309    0.75740    
-## BattingAvg               46.2677533   38.6381650   1.197    0.23113    
-## SluggingPct             -13.3369488   20.0041775  -0.667    0.50496    
-## BattingRuns              -0.0154377    0.0117788  -1.311    0.18998    
-## AdjustedBattingRuns      -0.0193033    0.0125367  -1.540    0.12362    
-## RunsCreated               0.0562587    0.0126170   4.459 0.00000824 ***
-## StolenBases               0.0019609    0.0027009   0.726    0.46782    
-## CaughtStealing            0.0039656    0.0074257   0.534    0.59332    
-## FieldingAvg              12.8472402   30.6727975   0.419    0.67533    
-## FieldingRuns             -0.0087311    0.0067585  -1.292    0.19640    
-## PrimaryPositionPlayed2   -0.0448519    1.6957559  -0.026    0.97890    
-## PrimaryPositionPlayed3    0.8238471    1.9108464   0.431    0.66636    
-## PrimaryPositionPlayedC    4.0280781    1.5210504   2.648    0.00809 ** 
-## PrimaryPositionPlayedD  -12.5595462 1394.7651238  -0.009    0.99282    
-## PrimaryPositionPlayedO   -0.1435122    0.9657619  -0.149    0.88187    
-## PrimaryPositionPlayedS    1.6354095    2.0225695   0.809    0.41876    
-## TotalPlayerRating         0.2036308    0.0694509   2.932    0.00337 ** 
+##                           Estimate  Std. Error z value Pr(&gt;|z|)   
+## (Intercept)            -43.1104307  16.7136341  -2.579  0.00990 **
+## NumSeasonsPlayed         0.1198116   0.1155498   1.037  0.29979   
+## GamesPlayed              0.0023026   0.0032844   0.701  0.48326   
+## OfficialAtBats          -0.0031829   0.0022066  -1.442  0.14919   
+## RunsScored               0.0071657   0.0030050   2.385  0.01710 * 
+## Hits                     0.0074258   0.0067091   1.107  0.26837   
+## Doubles                 -0.0041082   0.0045296  -0.907  0.36443   
+## Triples                  0.0097628   0.0096271   1.014  0.31054   
+## HomeRuns                 0.0091180   0.0099260   0.919  0.35831   
+## RunsBattedIn             0.0030795   0.0018716   1.645  0.09989 . 
+## Walks                   -0.0016169   0.0028482  -0.568  0.57024   
+## Strikeouts               0.0003356   0.0009210   0.364  0.71553   
+## BattingAvg              22.7596195  44.1658464   0.515  0.60633   
+## OnBasePct               26.5224639  30.7272054   0.863  0.38805   
+## SluggingPct             -1.6364383  18.2779739  -0.090  0.92866   
+## AdjustedProduction       0.0186414   0.0374813   0.497  0.61894   
+## BattingRuns             -0.0084436   0.0079464  -1.063  0.28798   
+## AdjustedBattingRuns     -0.0098926   0.0090723  -1.090  0.27553   
+## RunsCreated             -0.0009490   0.0054154  -0.175  0.86090   
+## FieldingAvg             16.8792568  12.9494339   1.303  0.19241   
+## FieldingRuns            -0.0074821   0.0045739  -1.636  0.10188   
+## PrimaryPositionPlayed2  -0.1650616   1.0771134  -0.153  0.87821   
+## PrimaryPositionPlayed3  -0.2845888   1.0323301  -0.276  0.78280   
+## PrimaryPositionPlayedC   1.0225957   0.9930283   1.030  0.30312   
+## PrimaryPositionPlayedD -13.0384015 939.9578138  -0.014  0.98893   
+## PrimaryPositionPlayedO  -0.2126776   0.6021715  -0.353  0.72395   
+## PrimaryPositionPlayedS   0.2915678   1.2249434   0.238  0.81186   
+## TotalPlayerRating        0.1520027   0.0480034   3.166  0.00154 **
 ## ---
 ## Signif. codes:  0 '***' 0.001 '**' 0.01 '*' 0.05 '.' 0.1 ' ' 1
 ## 
 ## (Dispersion parameter for binomial family taken to be 1)
 ## 
-##     Null deviance: 462.1  on 808  degrees of freedom
-## Residual deviance: 114.1  on 785  degrees of freedom
-##   (190 observations deleted due to missingness)
-## AIC: 162.1
+##     Null deviance: 722.48  on 1180  degrees of freedom
+## Residual deviance: 239.36  on 1153  degrees of freedom
+##   (17 observations deleted due to missingness)
+## AIC: 295.36
 ## 
-## Number of Fisher Scoring iterations: 16</code></pre>
+## Number of Fisher Scoring iterations: 15</code></pre>
+<pre class="r"><code># predict based on the test data, type='response' output probabilities in the form of P(y=1|X)
+fittedresults &lt;- predict(model, newdata=test, type='response')
+
+# there are some NAs in the fitted results...we need to check into that - not sure how that's possible if I'm removing the features with NAs
+sum(is.na(fittedresults))</code></pre>
+<pre><code>## [1] 3</code></pre>
+<pre class="r"><code># if P(y=1|X) &gt; 0.5 then y = 1 otherwise y=0
+fittedresults &lt;- ifelse(fittedresults &gt; 0.5, 1, 0)
+
+# calculate the mean of the fitted results that don't equal the observed result
+misClasificError &lt;- mean(fittedresults != test$HOFMembership, na.rm=TRUE)
+
+# print the output as 100% - error
+print(paste('Accuracy',1-misClasificError))</code></pre>
+<pre><code>## [1] &quot;Accuracy 0.961832061068702&quot;</code></pre>
 </div>
 
 
