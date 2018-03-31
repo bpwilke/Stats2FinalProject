@@ -11,6 +11,7 @@ knitr::opts_chunk$set(echo = TRUE)
 library(kableExtra) # to make uber sexy tables for output
 library(pastecs) # for easy descriptive statistics
 library(ggbiplot) # implementation of biplot using ggplot2 for plotting PCs
+library(Amelia) # cool library for exploring missing data
 
 # turn off scientfic notation for the entire script
 options(scipen = 999)
@@ -48,6 +49,20 @@ BBHOFRaw$StolenBaseRuns <- as.integer(BBHOFRaw$StolenBaseRuns)
 knitr::kable(BBHOFRaw[1:5,],caption = "Top 10 Observations from Baseball Hall of Fame Data", row.names = FALSE, "html") %>%
   kable_styling(bootstrap_options = c("striped","hover"))
 
+
+
+```
+
+
+```{r, echo=TRUE, fig.width=8, fig.height=10}
+# display missing values
+missmap(BBHOFRaw, main="Missing Values in Raw Data")
+
+
+```
+
+
+```{r, echo=TRUE}
 # display frequency table for did/did not get inducted into HOF
 # since the labels also include 2, converting those to 1, so the result is truly binary (1, 0)
 BBHOFRaw$HOFMembership[BBHOFRaw$HOFMembership == 2] <- 1
@@ -100,6 +115,33 @@ summary(BBHOF_PCA)
 ```{r, echo=TRUE, fig.width=15, fig.height=10}
 # plot PCs using ggbiplot
 ggbiplot(BBHOF_PCA, obs.scale=1, var.scale=1, groups=BBHOF_Labels_PCA$HOFMembership, ellipse=TRUE, circle=TRUE) + theme(legend.position='top') + scale_color_discrete()
+
+```
+
+alright....working some logistic regression..
+
+```{r, echo=TRUE}
+
+# copy data set, remove Name from the raw data set, so it's not included in the model, also removing features to play with the model
+BBHOF_logistic <- BBHOFRaw
+dropcolumns <- c("Name", "StolenBaseRuns", "RunsScored", "OfficialAtBats", "RunsBattedIn", "OnBasePct", "Triples", "StrikeOuts", "AdjustedProduction")
+BBHOF_logistic <- BBHOF_logistic[,!(colnames(BBHOF_logistic) %in% dropcolumns)]
+
+# split the raw data into testing and training data
+set.seed(101) # set seed so that same sample can be reproduced in future
+
+# now selecting 75% of data as sample from total 'n' rows of the data  
+sample <- sample.int(n=nrow(BBHOF_logistic), size=floor(.75*nrow(BBHOF_logistic)), replace=FALSE)
+
+# subset the data using the sample integer vector created above
+train <- BBHOF_logistic[sample, ]
+test  <- BBHOF_logistic[-sample, ]
+
+# fitting the binomial logistic regression model, HOFMembership is dependent, fitting using all features
+model <- glm(train$HOFMembership ~., family=binomial(link='logit'),data=train)
+
+summary(model)
+
 
 ```
 
