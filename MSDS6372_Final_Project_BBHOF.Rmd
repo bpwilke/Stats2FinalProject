@@ -12,6 +12,7 @@ library(kableExtra) # to make uber sexy tables for output
 library(pastecs) # for easy descriptive statistics
 library(ggbiplot) # implementation of biplot using ggplot2 for plotting PCs
 library(Amelia) # cool library for exploring missing data
+library(ROCR) # for ROC plots and AUC calculations
 
 # turn off scientfic notation for the entire script
 options(scipen = 999)
@@ -55,16 +56,18 @@ knitr::kable(BBHOFRaw[1:5,],caption = "Top 10 Observations from Baseball Hall of
 
 
 ```{r, echo=TRUE, fig.width=8, fig.height=10}
-# display missing values
+# display missing values map (graphic)
 missmap(BBHOFRaw, main="Missing Values in Raw Data")
 
+# display number of NAs
+sapply(BBHOFRaw, function(x) sum(is.na(x)))
 
 ```
 
 
 ```{r, echo=TRUE}
 # display frequency table for did/did not get inducted into HOF
-# since the labels also include 2, converting those to 1, so the result is truly binary (1, 0)
+BBHOFRaw$HOFMembership[BBHOFRaw$HOFMembership == 2] <- 1# since the labels also include 2, converting those to 1, so the result is truly binary (1, 0)
 BBHOFRaw$HOFMembership[BBHOFRaw$HOFMembership == 2] <- 1
 count(BBHOFRaw, "HOFMembership")
 
@@ -152,10 +155,25 @@ sum(is.na(fittedresults))
 fittedresults <- ifelse(fittedresults > 0.5, 1, 0)
 
 # calculate the mean of the fitted results that don't equal the observed result - IGNORE NAs
-misClasificError <- mean(fittedresults != test$HOFMembership, na.rm=TRUE)
+misClasificError <- mean(fittedresults != test$HOFMembership, na.rm=TRUE) # this adds up all the instances of misclassification then divides by total (via mean)
 
 # print the output as 100% - error
 print(paste('Accuracy',1-misClasificError))
+
+
+```
+
+and now some ROC curves...
+
+```{r, echo=TRUE}
+
+pr <- prediction(fittedresults, test$HOFMembership)
+prf <- performance(pr, measure = "tpr", x.measure = "fpr")
+plot(prf)
+
+auc <- performance(pr, measure = "auc")
+auc <- auc@y.values[[1]]
+auc
 
 
 ```
