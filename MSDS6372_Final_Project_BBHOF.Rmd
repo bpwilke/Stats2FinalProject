@@ -13,13 +13,21 @@ library(pastecs) # for easy descriptive statistics
 library(ggbiplot) # implementation of biplot using ggplot2 for plotting PCs
 library(Amelia) # cool library for exploring missing data
 library(ROCR) # for ROC plots and AUC calculations
-
 # turn off scientfic notation for the entire script
 options(scipen = 999)
-
 ```
 
 ## Introduction
+
+Many players in the National Baseball League (MLB) become eligible for the National Baseball Hall of Fame after they have played 10 seasons of MLB and have been retired for five full seasons. For example, those players eligible for consideration in 2019 will have played their final game in 2013. However, many players who become eligible are not admitted.
+
+This project will explore the career performance statistics that influence whether a player will be admitted into the National Baseball Hall of Fame. The core data set was procured from The American Statistical Association (http://ww2.amstat.org/publications/jse/datasets/MLBHOF.new.txt) and includes data assembled from The Baseball Encyclopedia (Reichler 1993) and Total Baseball (Thorn and Parmer 1993).
+
+..
+
+
+Finally, once we've established a model for determining whether a player will be admitted to the National Baseball Hall of Fame from the core data - we will make predictions on players that were not in the core data.
+
 
 
 ## Exploratory Data Analysis
@@ -47,23 +55,26 @@ BBHOFRaw$StolenBaseRuns[BBHOFRaw$StolenBaseRuns == "."] <- NA
 BBHOFRaw$StolenBaseRuns <- as.integer(BBHOFRaw$StolenBaseRuns)
 
 # display top 5 observations
-knitr::kable(BBHOFRaw[1:5,],caption = "Top 10 Observations from Baseball Hall of Fame Data", row.names = FALSE, "html") %>%
-  kable_styling(bootstrap_options = c("striped","hover"))
-
-
-
+knitr::kable(BBHOFRaw[1:5,],caption = "Top 5 Observations from Baseball Hall of Fame Data", row.names = FALSE, "html") %>%
+  kable_styling(bootstrap_options = c("striped","hover","condensed"))
 ```
 
+# Missing Values in the Raw Data
+The following is a graphical representation of the completeness of the data. It is also followed with a table of counts of NAs in the data. Fortunately, this data is very complete and the only features that are affected by NAs are: StolenBaseRuns, CaughtStealing, Strikeouts, and StolenBases.
 
 ```{r, echo=TRUE, fig.width=8, fig.height=10}
 # display missing values map (graphic)
 missmap(BBHOFRaw, main="Missing Values in Raw Data")
 
-# display number of NAs
-sapply(BBHOFRaw, function(x) sum(is.na(x)))
+# calculate NAs for raw data, apply row labels as new column
+NAdataframe <- sapply(BBHOFRaw, function(x) sum(is.na(x)))
 
+# display NAs in kable table
+knitr::kable(NAdataframe,caption = "Counts of NAs (Missing Values) in Raw Data", row.names = TRUE, "html") %>%
+  kable_styling(bootstrap_options = c("striped","hover","condensed"), full_width=FALSE, position = "left")
 ```
 
+# 
 
 ```{r, echo=TRUE}
 # display frequency table for did/did not get inducted into HOF
@@ -91,6 +102,7 @@ knitr::kable(descriptiveTable,caption = "Descriptive Statistics for Numeric Feat
 
 ```
 
+# Principal Components Analysis
 
 
 ```{r echo=TRUE}
@@ -133,8 +145,8 @@ BBHOF_logistic <- BBHOF_logistic[,!(colnames(BBHOF_logistic) %in% dropcolumns)]
 # split the raw data into testing and training data
 set.seed(100) # set seed so that same sample can be reproduced in future
 
-# now selecting 90% of data as sample from total 'n' rows of the data  
-sample <- sample.int(n=nrow(BBHOF_logistic), size=floor(.90*nrow(BBHOF_logistic)), replace=FALSE)
+# now selecting 75% of data as sample from total 'n' rows of the data  
+sample <- sample.int(n=nrow(BBHOF_logistic), size=floor(.75*nrow(BBHOF_logistic)), replace=FALSE)
 
 # subset the data using the sample integer vector created above
 train <- BBHOF_logistic[sample, ]
@@ -178,6 +190,9 @@ auc
 
 ```
 
+
+
+Future Eligible: https://baseballhall.org/hall-of-famers/future-eligibles
 
 
 
