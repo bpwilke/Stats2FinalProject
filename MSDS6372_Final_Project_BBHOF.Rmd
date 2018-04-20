@@ -6,12 +6,14 @@ output: html_document
 ---
 
 ```{r setup, include=FALSE}
-knitr::opts_chunk$set(echo = TRUE)
+knitr::opts_chunk$set(echo = FALSE)
 # required libraries
+library(plyr)
 library(kableExtra) # to make uber sexy tables for output
 library(pastecs) # for easy descriptive statistics
-library(ggbiplot) # implementation of biplot using ggplot2 for plotting PCs
 library(Amelia) # cool library for exploring missing data
+library(ggplot2) # for plotting
+library(glmnet) # for LASSO logistic regression
 library(ROCR) # for ROC plots and AUC calculations
 # turn off scientfic notation for the entire script
 options(scipen = 999)
@@ -21,38 +23,107 @@ options(scipen = 999)
 
 Many players in the National Baseball League (MLB) become eligible for the National Baseball Hall of Fame after they have played 10 seasons of MLB and have been retired for five full seasons. For example, those players eligible for consideration in 2019 will have played their final game in 2013. However, many players who become eligible are not admitted.
 
-This project will explore the career performance statistics that influence whether a player will be admitted into the National Baseball Hall of Fame. The core data set was procured from The American Statistical Association (http://ww2.amstat.org/publications/jse/datasets/MLBHOF.new.txt) and includes data assembled from The Baseball Encyclopedia (Reichler 1993) and Total Baseball (Thorn and Parmer 1993).
+This project will explore the career performance statistics that influence whether a player will be admitted into the National Baseball Hall of Fame. The core data set was procured from <a href="http://ww2.amstat.org/publications/jse/datasets/MLBHOF.new.txt">The American Statistical Association</a> and includes data assembled from The Baseball Encyclopedia (Reichler 1993) and Total Baseball (Thorn and Parmer 1993).
 
-..
+The first objective of our project will be to establish a model for predicting Hall of Fame membership for the initial data. Finally, once we've established a model for determining whether a player will be admitted from the initial data - we will make predictions on players that were not in the initial data. This includes players who are eligible for considertaion this year as well as current players (taking into account trajectories of their careers).
+
+## Data Dictionary and Description
+
+We were given 27 variables and 1332 observations (players) in the inital data. These variables can be broken up into 2 main categories that we will call "box score statistics" and "advanced statistics" for each of the players. The box score statistics can readibly be found on any baseball website or in any box score. Below is a table of these box score statistics and a quick description of how players can accumulate those stats.
+
+```{r dataDescrip, echo=FALSE}
+variable <- c("Name (Player)","NumSeasonsPlayed", "GamesPlayed", 
+                        "OfficialAtBats (AB)", "RunsScored (R)", "Hits (H)", "Doubles", "Triples", 
+                        "HomeRuns (HR)", "RunsBattedIn (RBI)", "Walks", "Strikeouts", "BattingAvg (BA)", 
+                        "OnBasePct (OBP)", "SluggingPct (SLG)", "StolenBases (SB)", "CaughtStealing", 
+                        "FieldingAvg", "PrimaryPositionPlayed", 
+                        "HOFMembership (HOF)")
+
+description <- c("The name of the player",
+                 "Seasons played",
+                 "Games played",
+                 "Plate appearances that resulted in a hit, error, or non-sacrafice out",
+                 "Player returns safely to home",
+                 "Reaching first base safely via contacting the ball in fair territory w/o an error",
+                 "Reaching 2nd base on a hit",
+                 "Reaching 3rd base on a hit",
+                 "Safely scoring on a hit",
+                 "Making a play that allows a runner to score",
+                 "Reach base on balls",
+                 "Receiving an out via three strikes",
+                 "Ratio of hits to at bats",
+                 "Ratio of times on base (non-errors) to plate appearances",
+                 "Ratio of total bases (h + 2b + 3b + hr) to at bats",
+                 "Advances a base which he is not entitled to",
+                 "Making an out on the basepaths without the hitter making contact",
+                 "Defensive statistic, ratio of outs in the field to total play chances",
+                 "Defensive position played most frequently",
+                 "Whether or not the player made it into the hall of fame"
+                 )
+
+variable_descriptions <- data.frame(Variable = variable,Description = description)
+
+# display descriptions
+knitr::kable(variable_descriptions,caption = "Data Description", row.names = TRUE, "html") %>%
+  kable_styling(bootstrap_options = c("striped","hover","condensed"), full_width=FALSE)
+
+```
+
+<b>Note: Hall of Fame membership actually has 3 levels.</b> A "0" means the player is not in the Hall of Fame. A "1" means they made it into the Hall of Fame by being voted in by the Baseball Writers Association of America (BWAA), which is the more well known way to get in the Hall of Fame. A "2" means they were voted in by the Veteran Committee after not initially making it into the Hall of Fame. In some cases, getting voted in by the Veteran Committee has more to do with events later in the player's career, including: community involvement or managerial/coaching careers.
+
+Alongside the box score statistics we were provided more advanced statistics, including but not limited to Total Player Rating. In general, these statistics use the box score statistics plus some park or league factor to translate them into a more concrete value like runs or wins. The goal is to make comparing players easier. However, these aren't considered official stats, other web sites with similarly named statistics may not utilize the same formula as the data we've received. We aren't likely to be able to retrieve these more advanced statistics for current players and we'll attempt to use standardized and generally available player statistics in our analysis.
+
+More information can be found here on <a href="https://en.wikipedia.org/wiki/Total_player_rating">Total Player Rating</a>.
+
+## Data Load and Preparation
+
+We first needed to do some basic cleaning of the raw data so that we could do some exploratative analysis with it. This is the first 5 rows of the data after cleaning.
 
 
-Finally, once we've established a model for determining whether a player will be admitted to the National Baseball Hall of Fame from the core data - we will make predictions on players that were not in the core data.
-
-
-
-## Exploratory Data Analysis
-
-```{r, echo=TRUE}
+```{r, echo=FALSE}
 # import the data
 BBHOFRaw <- read.table("MLBHOF-tab.new.dat.txt", sep="\t", header=FALSE)
 
-# create column names
-colnames(BBHOFRaw) <- c("Name", "NumSeasonsPlayed", "GamesPlayed", "OfficialAtBats", "RunsScored", "Hits", "Doubles", "Triples", "HomeRuns", "RunsBattedIn", "Walks", "Strikeouts", "BattingAvg", "OnBasePct", "SluggingPct", "AdjustedProduction", "BattingRuns", "AdjustedBattingRuns", "RunsCreated", "StolenBases", "CaughtStealing", "StolenBaseRuns", "FieldingAvg", "FieldingRuns", "PrimaryPositionPlayed", "TotalPlayerRating", "HOFMembership")
+# set column names, since none were included in the data
+colnames(BBHOFRaw) <- c("Name","NumSeasonsPlayed", "GamesPlayed", 
+                        "OfficialAtBats", "RunsScored", "Hits", "Doubles", "Triples", 
+                        "HomeRuns", "RunsBattedIn", "Walks", "Strikeouts", "BattingAvg", 
+                        "OnBasePct", "SluggingPct", "AdjustedProduction", "BattingRuns", 
+                        "AdjustedBattingRuns", "RunsCreated", "StolenBases", "CaughtStealing", 
+                        "StolenBaseRuns", "FieldingAvg", "FieldingRuns", "PrimaryPositionPlayed", 
+                        "TotalPlayerRating", "HOFMembership")
 
-# fix some import typecasting issues and apply NA null for values with "."
+# create a character list for usage later (all data columns excluding Name, which isn't used in the modeling)
+colsNoName <- c("NumSeasonsPlayed", "GamesPlayed", 
+                        "OfficialAtBats", "RunsScored", "Hits", "Doubles", "Triples", 
+                        "HomeRuns", "RunsBattedIn", "Walks", "Strikeouts", "BattingAvg", 
+                        "OnBasePct", "SluggingPct", "AdjustedProduction", "BattingRuns", 
+                        "AdjustedBattingRuns", "RunsCreated", "StolenBases",  
+                        "FieldingAvg", "FieldingRuns", "PrimaryPositionPlayed", 
+                        "TotalPlayerRating", "HOFMembership")
+
+# convert Name to a character type from a factor
 BBHOFRaw$Name <- as.character(BBHOFRaw$Name)
 
+# convert . to NAs and set type to integer for StrikeOuts
 BBHOFRaw$Strikeouts[BBHOFRaw$Strikeouts == "."] <- NA
 BBHOFRaw$Strikeouts <- as.integer(BBHOFRaw$Strikeouts)
 
+# convert . to NAs and set type to integer for StolenBases
 BBHOFRaw$StolenBases[BBHOFRaw$StolenBases == "."] <- NA
 BBHOFRaw$StolenBases <- as.integer(BBHOFRaw$StolenBases)
 
+# convert . to NAs and set type to integer for CaughtStealing
 BBHOFRaw$CaughtStealing[BBHOFRaw$CaughtStealing == "."] <- NA
 BBHOFRaw$CaughtStealing <- as.integer(BBHOFRaw$CaughtStealing)
 
+# convert . to NAs and set type to integer for StolenBaseRuns
 BBHOFRaw$StolenBaseRuns[BBHOFRaw$StolenBaseRuns == "."] <- NA
 BBHOFRaw$StolenBaseRuns <- as.integer(BBHOFRaw$StolenBaseRuns)
+
+# make copies for future use
+df0<-BBHOFRaw
+df1<-BBHOFRaw
 
 # display top 5 observations
 knitr::kable(BBHOFRaw[1:5,],caption = "Top 5 Observations from Baseball Hall of Fame Data", row.names = FALSE, "html") %>%
@@ -60,40 +131,42 @@ knitr::kable(BBHOFRaw[1:5,],caption = "Top 5 Observations from Baseball Hall of 
 ```
 
 # Missing Values in the Raw Data
+
 The following is a graphical representation of the completeness of the data. It is also followed with a table of counts of NAs in the data. Fortunately, this data is very complete and the only features that are affected by NAs are: StolenBaseRuns, CaughtStealing, Strikeouts, and StolenBases.
 
-```{r, echo=TRUE, fig.width=8, fig.height=10}
+```{r, echo=FALSE, fig.width=8, fig.height=10}
 # display missing values map (graphic)
 missmap(BBHOFRaw, main="Missing Values in Raw Data")
 
-# calculate NAs for raw data, apply row labels as new column
-NAdataframe <- sapply(BBHOFRaw, function(x) sum(is.na(x)))
+# reduce dataset to only display the count of NAs for features that actuall have NAs
+keepcolumns <- c("StolenBaseRuns", "Strikeouts", "CaughtStealing", "StolenBases")
+NAdataframe <- BBHOFRaw[,(colnames(BBHOFRaw) %in% keepcolumns)]
+
+# calculate NAs for raw data
+NAdataframe <- sapply(NAdataframe, function(x) sum(is.na(x)))
 
 # display NAs in kable table
 knitr::kable(NAdataframe,caption = "Counts of NAs (Missing Values) in Raw Data", row.names = TRUE, "html") %>%
-  kable_styling(bootstrap_options = c("striped","hover","condensed"), full_width=FALSE, position = "left")
+  kable_styling(bootstrap_options = c("striped","hover","condensed"), full_width=FALSE)
 ```
 
-# 
+# Descriptive Statistics
 
-```{r, echo=TRUE}
-# display frequency table for did/did not get inducted into HOF
-BBHOFRaw$HOFMembership[BBHOFRaw$HOFMembership == 2] <- 1# since the labels also include 2, converting those to 1, so the result is truly binary (1, 0)
-BBHOFRaw$HOFMembership[BBHOFRaw$HOFMembership == 2] <- 1
-count(BBHOFRaw, "HOFMembership")
+The following outputs descriptive statistics for the raw data to be referenced throughout the analysis. 
 
+```{r, echo=FALSE}
 # descriptive statistics, load into new data frame for processing
 descriptiveTable <- stat.desc(BBHOFRaw)
 
 # remove non-numeric features
-dropcolumns <- c("Name","PrimaryPositionPlayed", "HOFMembership")
+dropcolumns <- c("Name","PrimaryPositionPlayed", "HOFMembership", "HOFMembershipFactor")
 descriptiveTable <- descriptiveTable[,!(colnames(descriptiveTable) %in% dropcolumns)]
 
 # round all numeric values to 2 decimal points
 descriptiveTable <- round(descriptiveTable, 2)
 
 # remove rows for statistics we don't care about, leaving: N, Mean, Median, Std Dev, Var, Min, Max
-remove <- c("nbr.null", "nbr.na", "range", "sum", "SE.mean", "CI.mean", "coef.var")
+remove <- c("nbr.val","nbr.null", "nbr.na", "range", "sum", "SE.mean", "CI.mean", "coef.var")
 descriptiveTable <- descriptiveTable[-which(rownames(descriptiveTable) %in% remove),]
 
 # display descriptive statistics
@@ -102,13 +175,25 @@ knitr::kable(descriptiveTable,caption = "Descriptive Statistics for Numeric Feat
 
 ```
 
-# Principal Components Analysis
+# Distribution of Positive Result (Hall of Fame Membership)
 
+The raw data is sparsely populated with those athletes that made it into the Baseball Hall of Fame. As you can see from the table below - only 124 athletes in the data made it into the Baseball Hall of Fame of the total 1332 athletes (9.31%). This unbalanced data will need to be addressed once we finalize our approach for the predictive model.
 
-```{r echo=TRUE}
+```{r, echo=FALSE}
+# display frequency table for did/did not get inducted into HOF
+count(BBHOFRaw, "HOFMembership")
 
-# remove non-numeric features and features with missing values (NEED TO REVISIT THIS)
-dropcolumnsPCA <- c("Name", "PrimaryPositionPlayed", "HOFMembership", "Strikeouts", "StolenBases", "CaughtStealing", "StolenBaseRuns")
+# display stacked bar chart of distribution between 1, 0 in HOF membership
+#ggplot(data = BBHOFRaw, aes(1, HOFMembershipFactor, fill = HOFMembershipFactor)) + geom_bar(stat="identity")
+```
+
+# Principal Component Analysis of Raw Data
+
+We will utilize Principal Component Analysis (PCA) on the raw data in order to determine whether any of the continuous variables in the data will be useful in predicting Baseball Hall of Fame membership.
+
+```{r echo=FALSE}
+# remove non-numeric features and features with missing values 
+dropcolumnsPCA <- c("Name", "PrimaryPositionPlayed", "HOFMembership", "HOFMembershipFactor", "Strikeouts", "StolenBases", "CaughtStealing", "StolenBaseRuns")
 BBHOF_PCA <- BBHOFRaw[,!(colnames(BBHOFRaw) %in% dropcolumnsPCA)]
 
 # extract labels (player made it into HOF), convert to factor
@@ -121,78 +206,506 @@ BBHOF_PCA <- prcomp(BBHOF_PCA, center=TRUE, scale.=TRUE)
 # print principal components (only the first 4 PCs)
 print(BBHOF_PCA$rotation[,1:4])
 
-# summary of principal components
+# summary of principal componentsah
 summary(BBHOF_PCA)
 
-
+# plot a scree plot
+screeplot(BBHOF_PCA, main = "Screeplot for PCA of Raw Data")
 ```
 
-```{r, echo=TRUE, fig.width=15, fig.height=10}
-# plot PCs using ggbiplot
-ggbiplot(BBHOF_PCA, obs.scale=1, var.scale=1, groups=BBHOF_Labels_PCA$HOFMembership, ellipse=TRUE, circle=TRUE) + theme(legend.position='top') + scale_color_discrete()
+As shown above about 75% of the variation is explained in the first 2 principal components (with a very large percentage, 63%, being explained by the first principal component). The scree plot above echoes the variation explained and suggests that there is at least 1 continuous variable that will have effective predictive ability.
 
+This makes Principal Component Analysis as an exploratory exercise acceptable for this sort of analysis.
+
+We will now plot Principal Component 1 against Principal Component 2 and code the plot by the levels of Hall of Fame Membership (0, 1, 2). 
+
+```{r, echo=FALSE}
+# prep data for ggplot
+
+BBHOF_PCA_plot <- BBHOF_PCA$x # extract data from prcomp object into a matrix
+BBHOF_PCA_plot <- data.frame(BBHOF_PCA_plot) # convert to data frame
+
+BBHOF_PCA_plot$labels <- BBHOF_Labels_PCA$HOFMembership # add the labels as factor to the data frame from the original response (1,0)
+
+# plot PC1 against PC2 using ggplot
+ggplot(data = BBHOF_PCA_plot, aes(x = PC1, y = PC2)) + geom_point(aes(col = labels), size = 1) + ggtitle("Plot of PC1 versus PC2 to Examine Clustering of Response") + labs(x = "Principal Component 1", y = "Principal Component 2") + scale_color_brewer(palette="Set2")
 ```
 
-alright....working some logistic regression..
+The PCA plot of this data exhibits good clustering and suggests that we will have success predicting outcomes with these data. It's also visually evident that it will be harder to predict those in the Baseball Hall of Fame with a value of 2, versus those with a value of 1. This is shown as the 2’s are closer and intermingled with the 0’s, whereas the 1’s have a much greater separation. This is an important discovery about the 2’s in the data that we will address later.
 
-```{r, echo=TRUE}
 
+# Fitting a Full Model with Binomial Logistic Regression for Predicting Hall of Fame Membership
+
+Binomial logistic regression is a special form of multiple regression that is used to model a dichotomous outcome. In our case, whether an athlete made it into the Baseball Hall of Fame. We fit a full model (using all features) as an initial exploration into the predictive capability of the features. As the binomial regression requires a binary response - we coded the Hall of Fame membership to 0's and 1's by converting the 2's to 1's. That is, whether they made it into the Hall of Fame by being voted in by the Baseball Writers Association of America (BWAA) or if they were voted in by the Veteran Committee after not initially making it into the Hall of Fame.
+
+```{r, echo=FALSE}
 # copy data set, remove Name from the raw data set, so it's not included in the model, also removing features to play with the model
 BBHOF_logistic <- BBHOFRaw
 dropcolumns <- c("Name", "StolenBaseRuns", "StrikeOuts", "CaughtStealing", "StolenBases")
 BBHOF_logistic <- BBHOF_logistic[,!(colnames(BBHOF_logistic) %in% dropcolumns)]
 
-# split the raw data into testing and training data
-set.seed(100) # set seed so that same sample can be reproduced in future
-
-# now selecting 75% of data as sample from total 'n' rows of the data  
-sample <- sample.int(n=nrow(BBHOF_logistic), size=floor(.75*nrow(BBHOF_logistic)), replace=FALSE)
-
-# subset the data using the sample integer vector created above
-train <- BBHOF_logistic[sample, ]
-test  <- BBHOF_logistic[-sample, ]
+# since the labels HOFMembership also include 2 (with 1 and 0), converting those to 1, so the result is truly binary (1, 0)
+BBHOF_logistic$HOFMembership[BBHOF_logistic$HOFMembership == 2] <- 1
 
 # fitting the binomial logistic regression model, HOFMembership is dependent, fitting using all features
-model <- glm(train$HOFMembership ~., family=binomial(link='logit'),data=train)
+model <- glm(BBHOF_logistic$HOFMembership ~., family=binomial(link='logit'),data=BBHOF_logistic)
 
 summary(model)
 
-# predict based on the test data, type='response' output probabilities in the form of P(y=1|X)
-fittedresults <- predict(model, newdata=test, type='response')
+fittedresults <- predict(model, newdata=BBHOF_logistic, type='response')
+fittedresults <- ifelse(fittedresults > 0.5, 1, 0)
+misClasificError <- mean(fittedresults != BBHOF_logistic$HOFMembership, na.rm=TRUE) 
+print(paste('Accuracy',1-misClasificError))
 
-# there are some NAs in the fitted results...we need to check into that - not sure how that's possible if I'm removing the features with NAs
-sum(is.na(fittedresults))
+```
+
+As shown above in the full model the feature TotalPlayerRating is shown as highly significant to the model (p-value = .000413). Ideally, we will find a model that doesn't use statistics we can't easily find for current players. In the initial data, TotalPlayerRating is one of the best predictors for the Baseball Hall of Fame, which makes sense since it is likely measuring the quality of the player via other statistics. With this in mind, we wanted to explore how the other features are related to this statistic, and if we could proceed without it. 
+
+Also shown above is the accuracy rate (95.8%) our model had when we ran it on itself (predicting all the data from a model built with all of the data). Essentially we wanted to see how well it predicts the original data set to get an idea of predictive capability.
+
+
+# Using Multiple Linear Regression to Determine How TotalPlayerRating is Related with Other Features
+
+We created a multiple linear regression model using the statistics we can easily get off the web for current players and examined how they contribute to TotalPlayerRating.
+
+```{r tpr, echo=FALSE}
+# create linear model of all features against TotalPlayerRating
+tpr <- lm(TotalPlayerRating ~ OfficialAtBats + RunsScored + Hits + Doubles + Triples +
+            HomeRuns + RunsBattedIn + Walks + Strikeouts + BattingAvg + OnBasePct +
+            SluggingPct + StolenBases + CaughtStealing, data = BBHOFRaw)
+
+summary(tpr)
+
+```
+
+As we expected, TotalPlayerRating is a linear combinations of some of the basic stats plus a defense adjustment (r^2 jumps to 0.8394 when adding fielding runs) and then ballpark/era adjustments that we can't really get.
+
+With this verified we feel safe that models without advanced statistics will still perform just as well.
+
+At this point, we were very pleased with our accuracy percentage (95.8%), but also realized a model that just assumed no one was a Hall of Famer would be 91% right. So, we knew we would have to alter our model, at least slightly. 
+
+We noticed a lot of the non-hall of famers weren't even close to being hall of famers mainly due to lack of at bats (obviously bad players get less at bats since teams don't want to play bad players). So we started looking for a minimum number of at bat for players to have a realistic chance at being hall of famers. 
+
+Here are some descriptive statistics of at bats for hall of famer players only:
+
+``` {r atBatInfo }
+
+hof <- BBHOFRaw[ BBHOFRaw$HOFMembership == 1, ]$OfficialAtBats
+summary(hof)
+
+```
+
+Quick estimates of outliers can be "mean +/- 2 standard deviations" or "median +- 1.5 IQR", and in this case those values are:
+
+``` {r outliers}
+
+meansd <- round( mean(hof) - 2 * sd(hof), 2)
+medianiqr <- round( median(hof) - 1.5 * 2206)
+
+cat('Outliers using mean:' , meansd )
+cat('Outliers using median:' , medianiqr )
+
+```
+
+So we'd want to test different models where we only look at players with at least 5000 at bats, or models that have even higher minimum at bat requirements.
+
+After toying around with different numbers, we came to an agreement that looking at only players who had at least 6000 at bats would give us the best chance to predict future hall of famers.
+
+The following displays the proportions of Hall of Fame Members with less than 6000 At Bats and compares it to the proportions of Hall of Fame Members with greater than 6000 At Bats. For this analysis we also coded the HOFMembership 2's to 1's. We wanted to analyze all Hall of Fame members regardless of how they were awarded. 
+
+```{r, echo=FALSE, fig.width=3, fig.height=3}
+# get 2 data sets for plotting, one with less than 6k bats, one with greater than 6k
+plotLess6000 <- BBHOFRaw[BBHOFRaw$OfficialAtBats < 6000,]
+plotGreat6000 <- BBHOFRaw[BBHOFRaw$OfficialAtBats > 6000,]
+
+# set the HOF membership 2s to 1s
+plotLess6000$HOFMembership[plotLess6000$HOFMembership == 2] <- 1
+plotGreat6000$HOFMembership[plotGreat6000$HOFMembership == 2] <- 1
+
+# convert to factor for plotting
+plotLess6000$HOFMembership <- as.factor(plotLess6000$HOFMembership)
+plotGreat6000$HOFMembership <- as.factor(plotGreat6000$HOFMembership)
+
+# display stacked bar chart, for HOFs < 6000 and > 6000
+ggplot(data = plotLess6000, aes(1, HOFMembership, fill = HOFMembership)) + geom_bar(stat="identity") + scale_fill_brewer(palette="Set1") + ggtitle("Less than 6000 At Bats") + theme(axis.title.x=element_blank(), axis.text.x=element_blank(), axis.ticks.x=element_blank(), axis.text.y=element_blank(), axis.ticks.y=element_blank())
+
+ggplot(data = plotGreat6000, aes(1, HOFMembership, fill = HOFMembership)) + geom_bar(stat="identity") + scale_fill_brewer(palette="Set1") + ggtitle("Greater than 6000 At Bats") + theme(axis.title.x=element_blank(), axis.text.x=element_blank(), axis.ticks.x=element_blank(), axis.text.y=element_blank(), axis.ticks.y=element_blank())
+```
+
+It's also important to look at the number of players in this breakdown and not only the proportions. As you'll see below the number of players that didn't make it into the Hall of Fame with less than 6000 At Bats is significant!
+
+```{r, echo=FALSE}
+# create table to display frequency of factor HOFMembership
+less6000 <- as.data.frame(table(plotLess6000$HOFMembership))
+great6000 <- as.data.frame(table(plotGreat6000$HOFMembership))
+
+colnames(less6000) <- c("HOFMembership", "Frequency")
+colnames(great6000) <- c("HOFMembership", "Frequency")
+
+# display count tables
+knitr::kable(less6000,caption = "Less than 6000 At Bats", row.names = FALSE, "html") %>%
+  kable_styling(bootstrap_options = c("striped","hover", "condensed", "responsive"), full_width=FALSE, position = "left")
+knitr::kable(great6000,caption = "Greater than 6000 At Bats", row.names = FALSE, "html") %>%
+  kable_styling(bootstrap_options = c("striped","hover", "condensed", "responsive"), full_width=FALSE, position = "left")
+
+```
+
+
+## Improving Our Accuracy - Veteran Committee Hall of Famers
+
+As stated earlier, the players with a "2" in HOFMembership were Hall of Famers, but they were elected in a different manor. They were selected after their 15 years expired and by the Veteran Committee. Some of these players made it for other reasons outside of their statistics such as a good managerial career.
+
+This could possibly explain some of the inaccuracy of our model. To check this, we ran the logistic model on itself again and used it to predict whether each player should be in the Hall of Fame or not. Then we looked at the false negatives, the players that actually are in the Hall of Fame but our model predicted wouldn't be.
+
+```{r falseNegs, echo=FALSE}
+
+df1$Other <- df1$HOFMembership
+df1$HOFMembership[df1$HOFMembership == 2] <- 1
+df1all <- df1[ , colsNoName]
+
+model <- glm(df1all$HOFMembership ~. , family=binomial(link='logit'),data=df1all)
+fittedresults <- predict(model, newdata=df1all, type='response')
+fittedresults <- ifelse(fittedresults > 0.5, 1, 0)
+df1$guess <- fittedresults
+hof1 <- df1[ df1$HOFMembership ==1 ,   ]
+falseNegs <- hof1[ hof1$guess == 0,  ]
+
+#falseNegs <- falseNegs[complete.cases(falseNegs), ]
+
+cat('Total False Negatives:' , nrow(falseNegs))
+cat('False Negatives with HoF=2:' , nrow(falseNegs[ falseNegs$Other==2 , ]) )
+
+```
+
+28 of the 35 false negatives were due to being elected by the Veteran Committee, aka they had a HOFMembership value of "2". This lead us to believe that those players are preventing our model from being as accurate as possible. 
+
+Our final model will coerce the "2" from the HoFMembership column to "0", will only use the basic stats, and will only include players with at least 6000 At Bats. 
+
+
+# Principal Component Analysis on Final Data
+
+The following will perform a Principal Component Analysis (PCA) on the final data set to determine if we are still maintaining a visual clustering of our response. The PCA will be performed on the final selected featues, coding 2's in the HOFMembership to 0's, and removing all players with less than 6000 At Bats.
+
+```{r finalPCA, echo=FALSE}
+# get raw data, load into new data frame
+finalPCA <- BBHOFRaw
+
+# reduce raw data only to final features - also removing HOFMembership
+basic <- c( 
+  "OfficialAtBats", "RunsScored", "Hits",
+  "HomeRuns", "RunsBattedIn", "BattingAvg", 
+  "OnBasePct", "SluggingPct", "StolenBases", 
+  "HOFMembership") 
+finalPCA <- finalPCA[,basic]
+
+# remove all players with less than 6000 At Bats
+finalPCA <- finalPCA[finalPCA$OfficialAtBats > 6000 , basic]
+
+# code HOFMembership 2's to 0's
+finalPCA$HOFMembership[finalPCA$HOFMembership == 2] <- 0
+
+# extract labels (player made it into HOF), convert to factor, remove from the PCA data set
+finalPCA_labels <- finalPCA["HOFMembership"]
+finalPCA_labels$HOFMembership <- as.factor(finalPCA_labels$HOFMembership)
+finalPCA <- finalPCA[,!(colnames(finalPCA) == "HOFMembership")]
+
+# perform PCA
+finalPCA.model <- prcomp(finalPCA, center=TRUE, scale.=TRUE)
+
+# print principal components (only the first 4 PCs)
+print(finalPCA.model$rotation[,1:4])
+
+# summary of principal componentsah
+summary(finalPCA.model)
+
+# plot a scree plot
+screeplot(finalPCA.model, main = "Screeplot for PCA of Final Data")
+
+```
+
+Approximately 70% of the variation is explained by the first two Principal Components as reflected in the Importance output and scree plot above. We will now plot Principal Component 1 against Principal Component 2 to examine clustering.
+
+```{r finalPCAPlot, echo=FALSE}
+# prep data for ggplot
+
+final_BBHOF_PCA_plot <- finalPCA.model$x # extract data from prcomp object into a matrix
+final_BBHOF_PCA_plot <- data.frame(final_BBHOF_PCA_plot) # convert to data frame
+
+final_BBHOF_PCA_plot$labels <- finalPCA_labels$HOFMembership # add the labels as factor to the data frame from the original response (1,0)
+
+# plot PC1 against PC2 using ggplot
+ggplot(data = final_BBHOF_PCA_plot, aes(x = PC1, y = PC2)) + geom_point(aes(col = labels), size = 1) + ggtitle("Plot of PC1 versus PC2 to Examine Clustering of Response for Final Data") + labs(x = "Principal Component 1", y = "Principal Component 2") + scale_color_brewer(palette="Set1")
+```
+
+The PCA plot of the final data also exhibits good clustering and suggests that we will have success predicting outcomes with these data.
+
+# Using GLMNET with LASSO and Cross-Validation to Build the Final Model
+
+We will now build a model using a GLMNET for feature selection and coeffecient optimization utilizing LASSO (Least Absolute Shrinkage and Selection Operator) and cross-validation. We randomly selected 25% of the final data as a hold out testing set to judge the predictive capability of our model. This model selection will also utilize cross-validation with the goal of optimizing the value of lambda - the penalty term in the LASSO regularization.
+
+```{r logRegTest, echo=FALSE}
+# get raw data, load into new data frame
+logisticRegression_pred <- BBHOFRaw
+
+# reduce raw data only to final features
+basic <- c("OfficialAtBats", "RunsScored", "Hits", "HomeRuns", "RunsBattedIn", "BattingAvg", "OnBasePct","SluggingPct", "StolenBases", "HOFMembership") 
+logisticRegression_pred <- logisticRegression_pred[,basic]
+
+# remove all players with less than 6000 At Bats
+logisticRegression_pred <- logisticRegression_pred[logisticRegression_pred$OfficialAtBats > 6000, basic]
+
+# code HOFMembership 2's to 0's
+logisticRegression_pred$HOFMembership[logisticRegression_pred$HOFMembership == 2] <- 0
+
+# split the raw data into testing and training data
+set.seed(13) # set seed so that same sample can be reproduced in future
+
+# now selecting 75% of data as sample from total 'n' rows of the data  
+sample <- sample.int(n=nrow(logisticRegression_pred), size=floor(.80*nrow(logisticRegression_pred)), replace=FALSE)
+
+# subset the data using the sample integer vector created above
+train <- logisticRegression_pred[sample, ]
+test  <- logisticRegression_pred[-sample, ]
+
+# isolate the binary response "HOFMembership" from the training data, convert to factor
+logisticRegression_pred.train.y <- train$HOFMembership
+logisticRegression_pred.train.y <- as.factor(logisticRegression_pred.train.y)
+
+# create matrix for training data
+logisticRegression_pred.train.x <- model.matrix(train$HOFMembership ~.-1, train)
+
+# this data does not have any categorical features, so it can be used as is (i.e. we don't need to code factors)
+# use glmnet to fit a binomial logistic regression
+model <- cv.glmnet(logisticRegression_pred.train.x, logisticRegression_pred.train.y, family = "binomial", alpha=1)
+
+# plot the binomial deviance to examine optimal lambda value
+plot(model)
+
+#print optimal penalty (lambda)
+model$lambda.min
+
+#print optimal penalty + 1SE (lambda)
+model$lambda.1se
+
+#print table with coeffecients (using the lambd.min penalty)
+coef(model, s = "lambda.1se")
+```
+
+The coeffecients provided in the model suggest that the only significant terms are:
+
+RunsScored<br>
+Hits<br>
+HomeRuns<br>
+RunsBattedIn<br>
+OnBasePct<br>
+SluggingPct<br>
+
+We will now test the prediction accuracy of our model using the 25% hold out test set.
+
+```{r}
+# prepare the test set in the similar way to the train set
+# isolate the binary response "HOFMembership" from the test data, convert to factor
+logisticRegression_pred.test.y <- test$HOFMembership
+logisticRegression_pred.test.y <- as.factor(logisticRegression_pred.train.y)
+
+# create matrix for test data
+logisticRegression_pred.test.x <- model.matrix(test$HOFMembership ~.-1, test)
+
+# predict based on the test data, type='response' output probabilities in the form of P(y=1|X)
+pred_fittedresults <- predict(model, newx=logisticRegression_pred.test.x, type='response')
 
 # if P(y=1|X) > 0.5 then y = 1 otherwise y=0
-fittedresults <- ifelse(fittedresults > 0.5, 1, 0)
+pred_fittedresults <- ifelse(pred_fittedresults > 0.5, 1, 0)
 
 # calculate the mean of the fitted results that don't equal the observed result - IGNORE NAs
-misClasificError <- mean(fittedresults != test$HOFMembership, na.rm=TRUE) # this adds up all the instances of misclassification then divides by total (via mean)
+misClasificError <- mean(pred_fittedresults != test$HOFMembership, na.rm=TRUE) # this adds up all the instances of misclassification then divides by total (via mean)
 
 # print the output as 100% - error
 print(paste('Accuracy',1-misClasificError))
+```
 
+This model exhibits acceptable predictive performance (correctly classifying 88.33% of the test set).
+
+# Fit the Final Model Using All of the Data and GLMNET
+
+The final model will be fit using all of the observations in the final dataset using LASSO feature selection. Per our analysis above, the final data is reduced from the raw data by coding 2's in the HOFMembership to 0's, and removing all players with less than 6000 At Bats. It will use the minimized lambda penalty calculated from the cross-validation LASSO in the previous section.
+
+```{r logReg, echo=FALSE}
+# get raw data, load into new data frame
+finalmodeldata <- BBHOFRaw
+
+# create string array of final features
+finalfeatures <- c("OfficialAtBats","RunsScored","Hits","HomeRuns","RunsBattedIn","BattingAvg","OnBasePct","SluggingPct","StolenBases","HOFMembership") 
+
+# remove all players with less than 6000 At Bats, 
+finalmodeldata <- finalmodeldata[finalmodeldata$OfficialAtBats > 6000,]
+
+# code HOFMembership 2's to 0's
+finalmodeldata$HOFMembership[finalmodeldata$HOFMembership == 2] <- 0
+
+# reduce raw data to final features
+finalmodeldata <- finalmodeldata[,finalfeatures]
+
+# isolate the binary response "HOFMembership" from the training data, convert to factor
+finalmodeldata.y <- finalmodeldata$HOFMembership
+finalmodeldata.y <- as.factor(finalmodeldata.y)
+
+# create matrix for training data
+finalmodeldata.x <- model.matrix(finalmodeldata$HOFMembership ~.-1, finalmodeldata)
+
+# this data does not have any categorical features, so it can be used as is (i.e. we don't need to code factors)
+# use glmnet to fit a binomial logistic regression
+finalmodel <- glmnet(finalmodeldata.x, finalmodeldata.y, family = "binomial", lambda=model$lambda.min)
 
 ```
 
-and now some ROC curves...
+# Predicting Hall of Fame Membership for 2018 Eligible Players
 
-```{r, echo=TRUE}
+Now we will examine players who are currently being voted on by the Baseball Hall of Fame committee in 2018. We extracted the list and their stats manually from baseballreference.com and will use our final logistic regression model to determine the percentage probability of their admittance.
 
-pr <- prediction(fittedresults, test$HOFMembership)
-prf <- performance(pr, measure = "tpr", x.measure = "fpr")
-plot(prf)
+```{r HoFCand, echo=FALSE}
+# create a string array to reduce features in imported data
+col <- c("AB","R","H","HR","RBI","BA","OBP","SLG","SB") 
 
-auc <- performance(pr, measure = "auc")
-auc <- auc@y.values[[1]]
-auc
+# import new data set 
+OnHoFBallot <- read.csv("OnHoFBallot.csv")
 
+# reduce columns to only those required
+HoFcand <- OnHoFBallot[ ,col]
+
+# rename columns to match the columns from our original data and final model
+colnames(HoFcand) <- c("OfficialAtBats","RunsScored","Hits","HomeRuns","RunsBattedIn","BattingAvg","OnBasePct","SluggingPct","StolenBases") 
+
+# convert to matrix
+HoFcand <- as.matrix(HoFcand)
+
+# predict HoF membership of new data
+HOF <- predict(finalmodel, newx=HoFcand, type='response')
+
+# add name and probability to data frame
+HoFcand_with_name <- data.frame(Name = OnHoFBallot$Player, HOF = round(HOF,3) )
+colnames(HoFcand_with_name) <- c("Name","HoFProbability")
+
+# sort decreasing on probablity
+HoFcand_with_name <- HoFcand_with_name[ order(HoFcand_with_name$HoFProbability, decreasing=TRUE), ]
+
+colnames(HoFcand_with_name) <- c("Name","HoF Probability")
+knitr::kable(HoFcand_with_name,caption = "HoF Candidate Probablities", row.names = FALSE, "html") %>%
+  kable_styling(bootstrap_options = c("striped","hover","condensed"), full_width=FALSE)
 
 ```
 
+From this list, we can see our model predicts Barry Bonds, Manny Ramirez and Gary Sheffield to have an extremely high chance of making the Hall of Fame. Sammy Sosa, Fred McGriff and Todd Helton are likely Hall of Famers, whereas Larry Walker and Jeff Kent are right on the border.
 
+Note: We are not taking into account steroid use. These predictions are based purely on the statistics and our model. Also, this is the likelihood that they make it into the Hall of Fame within 15 years of retiring, not whether they will be elected this year (2018).
 
-Future Eligible: https://baseballhall.org/hall-of-famers/future-eligibles
+# Predicting Hall of Fame Membership for Current Players with Current Statistics
 
+We'd also like to look at current players and see about their chances of making it into the Hall of Fame. We pulled down the top current players sorted by WAR (baseball reference's all encompassing statistic, similar to total player rating).
 
+```{r current, echo=FALSE}
 
+# create a string array to reduce features in imported data
+col <- c("AB","R","H","HR","RBI","BA","OBP","SLG","SB") 
+
+# import new data set 
+ActivePlayers <- read.csv("ActivePlayers.csv")
+
+# reduce columns to only those required
+HoFcurrent <- ActivePlayers[ ,col]
+
+# rename columns to match the columns from our original data and final model
+colnames(HoFcurrent) <- c("OfficialAtBats","RunsScored","Hits","HomeRuns","RunsBattedIn","BattingAvg","OnBasePct","SluggingPct","StolenBases") 
+
+# convert to matrix
+HoFcurrent <- as.matrix(HoFcurrent)
+
+# predict HoF membership of new data
+HOF <- predict(finalmodel, newx=HoFcurrent, type='response')
+
+HoFcurrent_with_name <- data.frame(Name = ActivePlayers$Player, HOF = round(HOF,3), AtBats = ActivePlayers$AB )
+colnames(HoFcurrent_with_name) <- c("Name","HoFProbability",'AtBats')
+
+HoFcurrent_with_name <- HoFcurrent_with_name[ order(HoFcurrent_with_name$HoFProbability, decreasing=TRUE), ]
+
+disp <- HoFcurrent_with_name[0:11,]
+
+colnames(disp) <- c("Name","HoF Probability",'At Bats')
+knitr::kable(disp,caption = "Current Player HoF Probablities", row.names = FALSE, "html") %>%
+  kable_styling(bootstrap_options = c("striped","hover","condensed"), full_width=FALSE)
+
+```
+If Albert Pujols, Adrian Beltre or Miguel Cabrera were to retire today we'd expect them to make it in the Hall of Fame. 
+
+The interesting player on this list is Ichiro Suzuki at only 38.8%. The baseball community believes that he will easily be admitting in the Hall of Fame due to his 3000+ hits, high batting average (0.311), and 500+ stolen bases. Our model does not take stolen bases into consideration, values slugging percentage (which is below average) more than batting average, and doesn't consider that part of his career was in Japan.
+
+All other players on this list would need more At Bats to improve their chances of making it into the Hall of Fame.
+
+# Predicting Hall of Fame Membership for Current Players (Extending Current Production)
+
+What if all these players played at their current pace until they reached 8500 at bats (the average amount of at bats for hall of famers)? Or, if they were close to 8500, what if they played 2 more years and got 1000 more at bats? What would their chances of making the Hall of Fame be?
+
+Note: We only looked at players with >2500 to weed out the players who almost certainly won't maintain their current pace. We settled on 2500 to make sure to include Bryce Harper and Mike Trout, currently players of interest.
+
+```{r projected, echo=FALSE}
+
+proj <- ActivePlayers
+
+## set at bats to 8500 for each player
+## if they're already over 7500 at bats, give them another 1000 at bats or 2 years
+#proj$AB8500[ proj$AB < 7500] <- 8500
+#proj$AB8500[ proj$AB >= 7500 ] <- proj$AB + 1000
+
+proj$AB8500 <- ifelse( proj$AB < 7500, 8500, proj$AB+1000  )
+
+## find the runs per at bat ratio, and multiply by their projected 
+## at bats to get their estimated run total if they were to get those at bats.
+## Repeat for each statistic holding batting average, 
+## on base percentage and slugging constant
+proj$R8500 <- round( proj$AB8500/proj$AB * proj$R )
+proj$H8500 <- round( proj$AB8500/proj$AB * proj$H )
+proj$HR8500 <- round( proj$AB8500/proj$AB * proj$HR )
+proj$RBI8500 <- round( proj$AB8500/proj$AB * proj$RBI )
+proj$SB8500 <- round( proj$AB8500/proj$AB * proj$SB )
+proj$diff <- proj$AB8500 - proj$AB
+
+## list of columns we want in our data frame
+cols <- c("AB8500","R8500","H8500","HR8500","RBI8500","BA","OBP","SLG","SB8500")
+
+## don't want to include too young of players who almost certainly won't maintain their pace
+keep <- proj[ proj$AB > 2500, ]
+projected <- keep[ , cols ]
+
+# rename columns to match the columns from our original data and final model
+colnames(projected) <- c("OfficialAtBats","RunsScored","Hits","HomeRuns","RunsBattedIn","BattingAvg","OnBasePct","SluggingPct","StolenBases") 
+
+# predict HoF membership of new data
+HOF <- predict(finalmodel, newx=as.matrix(projected), type='response')
+
+proj_with_name <- data.frame(Name = keep$Player, HOF = round(HOF,3), 
+                             AtBats = projected$OfficialAtBats, diff = keep$diff )
+colnames(proj_with_name) <- c("Name","HoFProbability","Proj AtBats","Added AtBats")
+
+proj_with_name <- proj_with_name[ order(proj_with_name$HoFProbability, decreasing=TRUE), ]
+
+disp <- proj_with_name[0:13,]
+
+colnames(proj_with_name) <- c("Name","HoFProbability","Proj At Bats","Added At Bats")
+knitr::kable(disp,caption = "Projected Current Player HoF Probablities", row.names = FALSE, "html") %>%
+  kable_styling(bootstrap_options = c("striped","hover","condensed"), full_width=FALSE)
+
+```
+
+Aside from the 3 current hall of famers we see others now make the list.
+
+While these players likely won't maintain their current pace, we get a good idea of who could conceivably be in the hall of fame. Mike Trout, Paul Goldschmidt, Giancarlo Stanton, Bryce Harper and Nolan Arenado are all reasonably young players who've already had a lot of success, but we think they need a lot of bats at their current pace (about 5000 for each) to be hall of famers.
+
+Joey Votto, Ryan Braun and Robinson Cano are veterans who appear low on the previous list that make big jumps based on getting more at bats (only 1000 more for Cano, 3000 for Braun and 3500 for Votto). Votto and Braun likely could fall short of the 8500 at bats and still make the hall of fame (excluding Braun's steroid issues), where it looks like Cano may need to exceed his 1000 at bats to solidify his candidacy.
+
+Ichiro's HoFProbability has a large jump, too. Our model thinks he's a likely hall of famer if he were to get another 1000 at bats at his overall career's pace. He is almost certainly not going to do this as his last few years have tailed off considerably. But, this is also saying that if he had played in the MLB instead of Japan for 2 years at the beginning, we would agree with the baseball consensus that he is a hall of famer.
+
+# Conclusion
+
+Even though the sport itself hasn’t changed much over the years, the way we evaluate players is ever changing. For further research, we could examine how the statistics of Hall of Fame players has changed over the years. It would also be interesting to calculate advanced statistics ourselves, taking into account players who are retired as well as those currently in the league. This project was focused on predicting Hall of Fame membership via hitting statistics, which leaves us a future project for predicting pitchers. Finally, it would interesting to take note of who makes it into the Hall of Fame in the coming years to validate our predictions.
+
+<br><br><br><br>
